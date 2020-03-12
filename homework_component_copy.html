@@ -38,7 +38,9 @@
       <div>
         <h4>關注城市</h4>
         <div class="card-columns">
-          <div v-for="(item, key) in stared" is="citybox" :items="item" v-on:staredok="getStaredData"></div>
+          <div v-for="(item, key) in getStaredData" is="citybox" :items="item" v-on:staredok="getStared">
+            <template slot="fullstar"><i class="fas fa-star"></i> </template>
+          </div>
         </div>
       </div>
 
@@ -46,10 +48,9 @@
 
       <div class="card-columns">
         <div is="citybox" 
-        v-for="(item, key) in newData" 
+        v-for="(item, key) in selectZone" 
         :items="item"
-        v-on:staredok="getStaredData"
-        v-if="item.AQI">
+        v-on:staredok="getStared">
         </div>
       </div>
     </div>
@@ -57,8 +58,8 @@
 <script type="text/x-template" id="box">
   <div class="card" :class="dataClass">
     <div class="card-header">{{items.County}}-{{items.SiteName}}
-      <a href="#" class="float-right" @click.prevent="staredItem(), items.isStared = !items.isStared, isStar = !isStar">
-        <i :class="changedStar"></i>
+      <a href="#" class="float-right" @click.prevent="staredItem()">
+        <slot name="fullstar"><i class="far fa-star"></i></slot>
       </a>
     </div>
     <div class="card-body">
@@ -81,8 +82,7 @@ Vue.component('citybox',{
   template: "#box",
 
   data: function () {
-    return {
-      isStar: true,  
+    return { 
       dataStared: this.items.isStared
     }
   },
@@ -115,14 +115,14 @@ Vue.component('citybox',{
         return 'status-aqi6'        
       }
     },
-
-    changedStar: function(){
-      if(this.isStar){
-        return 'far fa-star'
-      }else{
-        return 'fas fa-star'
-      }
-    }  
+    //從localstorage下來的資料無法計算，先棄，練習寫slot
+    // changedStar: function(){
+    //   if(this.dataStared){
+    //     return 'fas fa-star'
+    //   }else{
+    //     return 'far fa-star'
+    //   }
+    // }  
   }
 });
 
@@ -131,65 +131,81 @@ var app = new Vue({
   data: {
     data: [],
     location: [],
-    stared: [],
+    stared: JSON.parse(localStorage.getItem('favorite')) || [] ,
     filter: '',
-    newData: [],
   },
   // 請在此撰寫 JavaScript
   methods: {
-    getStaredData: function(item,key){
+    getData() {
+      const vm = this;
+      const api = 'http://opendata2.epa.gov.tw/AQI.json';
+      // 使用 jQuery ajax
+      $.get(api).then(function (response) {
+        vm.data = response;
+        vm.data.forEach((item) => {
+          vm.location.push(item.County)
+        })
+        vm.location = vm.location.filter((item, index, arr) => {
+          return arr.indexOf(item) === index
+        })
+      });
+    },
+
+    getStared: function(item){
       const vm = this
-      vm.stared.push(item)
-      vm.stared = vm.stared.filter((el, index, arr)=>{
-        return arr.indexOf(el) === index
+      let key = vm.stared.findIndex((item2)=>{
+        return item.SiteName == item2
       })
+      if(vm.stared.indexOf(item.SiteName) === -1){
+        vm.stared.push(item.SiteName)
+      }else{
+        vm.stared.splice(key,1)
+      }
+      localStorage.setItem('favorite', JSON.stringify(vm.stared))
     },
   },
 
   computed: {
-    filterData: function(){
-      const vm = this;
-      vm.data.find((el)=>{
-        vm.location.push(el.County)
+    //  computed回傳值一定要return
+    selectZone(){
+      const vm = this
+      if(vm.filter !== ""){
+        return vm.data.filter((el) => {
+          return el.County == vm.filter && vm.stared.indexOf(el.SiteName) === -1
         })
-      vm.location = [...new Set(vm.location)]
+      }else{
+        return vm.data.filter((item) => {
+          // 找出沒篩選過城市又不在stared裡的資料
+          return vm.stared.indexOf(item.SiteName) === -1;
+        })
+      }  
     },
 
-    selectZone: function () {
+    getStaredData(){
       const vm = this
-      vm.newData = vm.data.filter((el)=>{
-        if(vm.filter !== ""){
-          return el.County == vm.filter
-        }else{
-          return vm.data
-        }
+      return vm.data.filter((item, index, arr)=>{
+        return vm.stared.indexOf(item.SiteName) !== -1
       })
-    },
-
-    filterStared(){
-      const vm = this
-      const b = (el) => { return el.isStared === true }
-      vm.stared = vm.stared.filter(b)
-      // let c = []
-      // vm.stared.forEach((item)=>{
-      //   c.push(item.SiteName)  
-      // })
-      // localStorage.setItem('favorite', JSON.stringify(c))
     }
   },
 
-  created() {    
-    const vm = this;
-    const api = 'http://opendata2.epa.gov.tw/AQI.json';
-    // 使用 jQuery ajax
-    $.get(api).then(function( response ) {
-      vm.data = response;
-    });
+  created() { 
+    this.getData() 
+    
+    // const vm = this;
+    // const api = 'http://opendata2.epa.gov.tw/AQI.json';
+    // // 使用 jQuery ajax
+    // $.get(api).then(function( response ) {
+    //   vm.data = response;
+    //   vm.data.forEach((item) => {
+    //     vm.county.push(item.County)
+    //   })
+    //   vm.location = vm.county.filter((item, index, arr) => {
+    //     return arr.indexOf(item) === index
+    //   })
+    // });
   },
 
-  mounted() {
-    
-  }
 });
 
 </script>
